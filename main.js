@@ -208,6 +208,22 @@ function createGroupInfoUI() {
         container.innerHTML += `${member.name} - ${member.nrp}<br>`;
     });
 
+    // Informasi kontrol
+    const controlInfo = document.createElement('div');
+    controlInfo.style.marginTop = '15px';
+    controlInfo.style.paddingTop = '10px';
+    controlInfo.style.borderTop = '1px solid rgba(255,255,255,0.5)';
+    controlInfo.innerHTML = `
+        <div style="font-weight: bold; margin-bottom: 8px;">Kontrol Kapal:</div>
+        <div style="font-size: 12px; line-height: 1.8;">
+            <div><strong>W</strong> - Maju</div>
+            <div><strong>S</strong> - Mundur</div>
+            <div><strong>A</strong> - Belok Kiri</div>
+            <div><strong>D</strong> - Belok Kanan</div>
+        </div>
+    `;
+    container.appendChild(controlInfo);
+
     document.body.appendChild(container);
 }
 
