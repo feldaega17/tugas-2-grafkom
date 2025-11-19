@@ -42,7 +42,7 @@ const water = new Water(
     waterGeometry,
     {
         textureWidth: 512,
-        textureHeight: 512,
+        textureHeight: 600,
         waterNormals: new THREE.TextureLoader().load('https://threejs.org/examples/textures/waternormals.jpg', function (texture) {
             texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
         }),
@@ -55,6 +55,7 @@ const water = new Water(
 );
 
 water.rotation.x = -Math.PI / 2;
+water.position.y = 0.1; // Naikkan posisi air
 scene.add(water);
 
 // === LOAD KAPAL .GLB ===
@@ -74,7 +75,7 @@ loader.load('/boat.glb', (gltf) => {
     const scaleFactor = 5 / maxDim;
     boat.scale.setScalar(scaleFactor);
 
-    boat.position.y = 0.2; // Turunkan posisi kapal agar lebih 'tenggelam'
+    // Posisi awal diatur dalam loop animasi untuk pergerakan ombak
 
     boat.traverse((child) => {
         if (child.isMesh) {
@@ -87,6 +88,33 @@ loader.load('/boat.glb', (gltf) => {
     console.log('✅ Boat loaded');
 });
 
+// === KONTROL KAPAL ===
+const moveState = {
+    forward: 0,
+    turn: 0
+};
+
+function onKeyDown(event) {
+    switch (event.code) {
+        case 'KeyW': moveState.forward = 1; break;
+        case 'KeyS': moveState.forward = -1; break;
+        case 'KeyA': moveState.turn = 1; break;
+        case 'KeyD': moveState.turn = -1; break;
+    }
+}
+
+function onKeyUp(event) {
+    switch (event.code) {
+        case 'KeyW': if (moveState.forward === 1) moveState.forward = 0; break;
+        case 'KeyS': if (moveState.forward === -1) moveState.forward = 0; break;
+        case 'KeyA': if (moveState.turn === 1) moveState.turn = 0; break;
+        case 'KeyD': if (moveState.turn === -1) moveState.turn = 0; break;
+    }
+}
+
+document.addEventListener('keydown', onKeyDown);
+document.addEventListener('keyup', onKeyUp);
+
 // === RESPONSIVE ===
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -94,21 +122,32 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// === ANIMATE (ombak) ===
+// === ANIMATE ===
 const clock = new THREE.Clock();
 
 function animate() {
     requestAnimationFrame(animate);
 
+    const delta = clock.getDelta();
     const time = clock.getElapsedTime();
 
     water.material.uniforms['time'].value += 1.0 / 60.0;
 
     if (boat) {
         // Ombak: naik-turun sinusoidal
-        boat.position.y = 0.2 + Math.sin(time * 1.5) * 0.15; // Sesuaikan base height dan amplitudo
+        boat.position.y = -0.1 + Math.sin(time * 1.5) * 0.15; // Sesuaikan base height dan amplitudo
         boat.rotation.z = Math.sin(time) * 0.05; // Tingkatkan goyangan sisi
-        boat.rotation.x = Math.sin(time * 0.8) * 0.05; // Tingkatkan goyangan depan-belakang
+        const baseRotationX = Math.sin(time * 0.8) * 0.05; // Simpan rotasi ombak dasar
+
+        // Kontrol Gerakan
+        const moveSpeed = 5.0;
+        const turnSpeed = 1.5;
+
+        boat.rotation.y += moveState.turn * turnSpeed * delta;
+        boat.translateX(moveState.forward * moveSpeed * delta);
+
+        // Gabungkan rotasi ombak dengan rotasi kontrol
+        boat.rotation.x = baseRotationX;
     }
 
     controls.update();
