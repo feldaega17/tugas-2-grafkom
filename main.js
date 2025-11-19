@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Water } from 'three/addons/objects/Water.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
 let boat;
 
@@ -31,9 +34,36 @@ controls.update();
 scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
 const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-dirLight.position.set(5, 10, 7);
+dirLight.position.set(100, 100, -100); // Pindahkan posisi cahaya lebih jauh
 dirLight.castShadow = true;
+// Atur area bayangan agar lebih luas dan mencakup dermaga & kapal
+dirLight.shadow.camera.top = 50;
+dirLight.shadow.camera.bottom = -50;
+dirLight.shadow.camera.left = -50;
+dirLight.shadow.camera.right = 50;
+dirLight.shadow.camera.near = 0.1;
+dirLight.shadow.camera.far = 500;
 scene.add(dirLight);
+
+// === BUAT MATAHARI ===
+const sunGeometry = new THREE.SphereGeometry(20, 32, 32);
+const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xfff5c3 });
+const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+sun.position.copy(dirLight.position); // Posisikan matahari sama dengan sumber cahaya
+scene.add(sun);
+
+// === POST-PROCESSING (BLOOM EFFECT) ===
+const renderScene = new RenderPass(scene, camera);
+
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+bloomPass.threshold = 0.9; // Naikkan threshold agar hanya area paling terang yang 'bloom'
+bloomPass.strength = 0.8;   // Turunkan intensitas efek bloom
+bloomPass.radius = 0.5;    // Sedikit kurangi radius sebaran cahaya
+
+const composer = new EffectComposer(renderer);
+composer.addPass(renderScene);
+composer.addPass(bloomPass);
+
 
 // === AIR / LAUT (Water) ===
 const waterGeometry = new THREE.PlaneGeometry(10000, 10000);
@@ -46,7 +76,7 @@ const water = new Water(
         waterNormals: new THREE.TextureLoader().load('https://threejs.org/examples/textures/waternormals.jpg', function (texture) {
             texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
         }),
-        sunDirection: new THREE.Vector3(),
+        sunDirection: dirLight.position.clone().normalize(), // Arahkan ke posisi cahaya matahari
         sunColor: 0xffffff,
         waterColor: 0x001e0f,
         distortionScale: 3.7,
@@ -144,6 +174,41 @@ function createDock() {
 
     scene.add(dockGroup);
     console.log('✅ Dock created');
+}
+
+// === BUAT INFO KELOMPOK ===
+function createGroupInfoUI() {
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.top = '10px';
+    container.style.right = '10px';
+    container.style.backgroundColor = 'rgba(0,0,0,0.7)';
+    container.style.padding = '10px 15px';
+    container.style.borderRadius = '5px';
+    container.style.color = 'white';
+    container.style.fontFamily = 'sans-serif';
+    container.style.fontSize = '14px';
+    container.style.textAlign = 'right';
+
+    const title = document.createElement('h3');
+    title.innerText = 'Tugas Pengganti ETS - GRAFKOM D';
+    title.style.margin = '0 0 10px 0';
+    title.style.borderBottom = '1px solid rgba(255,255,255,0.5)';
+    title.style.paddingBottom = '5px';
+    container.appendChild(title);
+
+    // Ganti dengan nama dan NRP anggota kelompok Anda
+    const members = [
+        { name: 'Felda Ega Fadhila', nrp: '5025231199' },
+        { name: 'Naswan Nashir Ramadhan', nrp: '5025231246' },
+        // { name: 'Nama Anggota 3', nrp: 'NRP Anggota 3' },
+    ];
+
+    members.forEach(member => {
+        container.innerHTML += `${member.name} - ${member.nrp}<br>`;
+    });
+
+    document.body.appendChild(container);
 }
 
 // === UI INTERAKTIF ===
@@ -250,6 +315,7 @@ document.addEventListener('keyup', onKeyUp);
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+    composer.setSize(window.innerWidth, window.innerHeight);
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
@@ -281,10 +347,11 @@ function animate() {
         boat.rotation.x = baseRotationX;
     }
 
-    controls.update();
-    renderer.render(scene, camera);
+    controls.update(); // Perbarui kontrol kamera
+    composer.render(); // Gunakan composer untuk merender scene dengan efek
 }
 
 createDock();
+createGroupInfoUI();
 createUI();
 animate();
