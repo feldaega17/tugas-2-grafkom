@@ -256,8 +256,8 @@ function createUI() {
     const slider = document.createElement('input');
     slider.type = 'range';
     slider.id = 'density-slider';
-    slider.min = '0.5'; // Lebih ringan, lebih mengapung
-    slider.max = '1.5'; // Lebih berat, lebih tenggelam
+    slider.min = '0.5'; // Lebih ringan, lebih mengapung (500 kg/m³)
+    slider.max = '5.0'; // Lebih berat, lebih tenggelam (5000 kg/m³)
     slider.step = '0.01';
     slider.value = boatProperties.density;
     container.appendChild(slider);
