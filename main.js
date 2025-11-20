@@ -258,6 +258,14 @@ const boatProperties = {
     baseSink: -0.1
 };
 
+const autoMoveState = {
+    enabled: false,
+    direction: 1, // 1 for forward, -1 for backward
+    distanceTraveled: 0,
+    maxDistance: 20 // Jarak tempuh sebelum berbalik arah
+};
+
+
 function createUI() {
     const container = document.createElement('div');
     container.style.position = 'absolute';
@@ -313,6 +321,29 @@ function createUI() {
         updateInfoText();
     });
 
+    // --- Kontrol Gerak Otomatis ---
+    const autoMoveContainer = document.createElement('div');
+    autoMoveContainer.style.marginTop = '15px';
+    autoMoveContainer.style.paddingTop = '10px';
+    autoMoveContainer.style.borderTop = '1px solid rgba(255,255,255,0.5)';
+
+    const autoMoveLabel = document.createElement('label');
+    autoMoveLabel.innerText = 'Gerak Otomatis: ';
+    autoMoveContainer.appendChild(autoMoveLabel);
+
+    const autoMoveCheckbox = document.createElement('input');
+    autoMoveCheckbox.type = 'checkbox';
+    autoMoveCheckbox.id = 'auto-move-checkbox';
+    autoMoveCheckbox.checked = autoMoveState.enabled;
+    autoMoveLabel.appendChild(autoMoveCheckbox);
+
+    autoMoveCheckbox.addEventListener('change', (event) => {
+        autoMoveState.enabled = event.target.checked;
+        autoMoveState.distanceTraveled = 0; // Reset jarak saat diaktifkan/nonaktifkan
+        moveState.forward = 0; // Hentikan gerakan manual
+    });
+    container.appendChild(autoMoveContainer);
+
     document.body.appendChild(container);
     updateInfoText();
 }
@@ -323,12 +354,34 @@ const moveState = {
     turn: 0
 };
 
+// === Variabel & Konstanta Fisika untuk Gerakan Realistis ===
+const physicsState = {
+    velocity: 0,
+    angularVelocity: 0
+};
+
+const physicsConstants = {
+    engineForce: 15.0,      // Kekuatan dorongan mesin
+    brakeForce: 10.0,       // Kekuatan rem/mundur
+    dragCoefficient: 2.5,   // Hambatan air (semakin besar, semakin cepat berhenti)
+    turnTorque: 1.0,        // Kekuatan untuk berbelok
+    angularDrag: 1.5,       // Hambatan saat berputar
+};
+
 function onKeyDown(event) {
     switch (event.code) {
         case 'KeyW': moveState.forward = 1; break;
         case 'KeyS': moveState.forward = -1; break;
         case 'KeyA': moveState.turn = 1; break;
         case 'KeyD': moveState.turn = -1; break;
+    }
+
+    // Nonaktifkan gerak otomatis jika pengguna menekan tombol gerak manual
+    if (autoMoveState.enabled && ['KeyW', 'KeyS', 'KeyA', 'KeyD'].includes(event.code)) {
+        autoMoveState.enabled = false;
+        const checkbox = document.getElementById('auto-move-checkbox');
+        if (checkbox) checkbox.checked = false;
+        autoMoveState.distanceTraveled = 0;
     }
 }
 
@@ -369,16 +422,60 @@ function animate() {
         boat.rotation.z = Math.sin(time) * 0.05;
         const baseRotationX = Math.sin(time * 0.8) * 0.05;
 
-        const moveSpeed = 5.0;
-        const turnSpeed = 1.5;
-
         // Simpan posisi & rotasi sebelum gerak
         const prevPosition = boat.position.clone();
         const prevRotationY = boat.rotation.y;
 
-        // Gerakan kapal
-        boat.rotation.y += moveState.turn * turnSpeed * delta;
-        boat.translateX(moveState.forward * moveSpeed * delta);
+        // --- LOGIKA FISIKA BARU ---
+        // Massa sekarang langsung dipengaruhi oleh slider massa jenis agar efeknya lebih terasa.
+        // Nilai boatProperties.density berkisar antara 0.5 (ringan) hingga 1.5 (berat).
+        // Ini akan membuat akselerasi (a = F/m) sangat bergantung pada massa.
+        const mass = boatProperties.density;
+
+        // --- Gerak Maju/Mundur ---
+        let appliedForce = 0;
+        if (moveState.forward > 0) {
+            appliedForce = physicsConstants.engineForce;
+        } else if (moveState.forward < 0) {
+            appliedForce = -physicsConstants.brakeForce;
+        }
+
+        const dragForce = -physicsState.velocity * physicsConstants.dragCoefficient;
+        const totalForce = appliedForce + dragForce;
+        const acceleration = totalForce / mass;
+
+        physicsState.velocity += acceleration * delta;
+
+        // --- Gerak Berputar ---
+        // Logika baru: Kapal hanya bisa berbelok jika ada kecepatan (efek kemudi).
+        // Efektivitas belokan akan sebanding dengan kecepatan kapal.
+        const turnEffectiveness = Math.tanh(Math.abs(physicsState.velocity)); // Hasilnya antara 0 (diam) dan 1 (bergerak)
+
+        const appliedTorque = moveState.turn * physicsConstants.turnTorque * turnEffectiveness;
+        const angularDragForce = -physicsState.angularVelocity * physicsConstants.angularDrag;
+        const totalTorque = appliedTorque + angularDragForce;
+        const angularAcceleration = totalTorque / mass; // Massa juga mempengaruhi inersia putaran
+
+        physicsState.angularVelocity += angularAcceleration * delta;
+
+        // Terapkan gerakan
+        boat.rotation.y += physicsState.angularVelocity * delta;
+        boat.translateX(physicsState.velocity * delta);
+
+        // --- Logika Gerak Otomatis (disesuaikan) ---
+        if (autoMoveState.enabled) {
+            // Gerak otomatis sekarang hanya mengatur arah, bukan kecepatan langsung
+            const autoMoveSpeed = 2.0; // Kecepatan konstan untuk mode otomatis
+            const distanceThisFrame = autoMoveSpeed * delta;
+            boat.position.copy(prevPosition); // Reset gerakan fisika
+            boat.translateX(autoMoveState.direction * autoMoveSpeed * delta);
+            autoMoveState.distanceTraveled += distanceThisFrame;
+
+            if (autoMoveState.distanceTraveled >= autoMoveState.maxDistance) {
+                autoMoveState.direction *= -1; // Balik arah
+                autoMoveState.distanceTraveled = 0; // Reset jarak
+            }
+        }
 
         // Rotasi ombak
         boat.rotation.x = baseRotationX;
@@ -398,6 +495,9 @@ function animate() {
                 // Kena tabrak → kembalikan posisi & rotasi
                 boat.position.copy(prevPosition);
                 boat.rotation.y = prevRotationY;
+                // Hentikan semua momentum saat tabrakan
+                physicsState.velocity = 0;
+                physicsState.angularVelocity = 0;
             }
         }
     }
